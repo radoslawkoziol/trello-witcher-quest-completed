@@ -29,7 +29,10 @@
                 t.card('id', 'idList'),
                 t.get('board', 'shared', 'targetListId'),
                 t.get('card', 'private', 'lastListId')
-            ]).then(function([card, targetListId, lastListId]) {
+            ]).then(function(results) {
+                const card = results[0];
+                const targetListId = results[1];
+                const lastListId = results[2];
                 const currentListId = card.idList;
 
                 // Sprawdź czy jest skonfigurowana lista docelowa
@@ -56,7 +59,7 @@
                 },
                 text: 'Dźwięk',
                 callback: function(t) {
-                    // Pobierz wszystkie listy
+                    // Używamy t.lists() zamiast t.board('lists')
                     return t.lists('all').then(function(lists) {
                         return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
 
@@ -108,7 +111,6 @@
         },
 
         'show-settings': function(t, options) {
-            // Możesz też dodać settings w menu Power-Up
             return t.lists('all').then(function(lists) {
                 return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
 

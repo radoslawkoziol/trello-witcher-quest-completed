@@ -2,23 +2,30 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Sound Power-Up</title>
+    <title>Quest Complete Sound</title>
     <script src="https://p.trellocdn.com/power-up.min.js"></script>
 </head>
 <body>
 <script>
+    // Dźwięk ukończenia questa - możesz zmienić na lepszy!
     const SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3';
+
+    let audioUnlocked = false;
+    let audioContext = null;
 
     // Funkcja do odtwarzania dźwięku
     function playSound() {
         try {
             const audio = new Audio(SOUND_URL);
-            audio.volume = 0.6;
-            audio.play().catch(function(error) {
-                console.log('Nie można odtworzyć dźwięku:', error);
+            audio.volume = 0.7;
+            audio.play().then(function() {
+                audioUnlocked = true;
+                console.log('🎮 Quest Complete! Dźwięk odtworzony!');
+            }).catch(function(error) {
+                console.log('🔇 Audio zablokowane:', error.message);
             });
         } catch (error) {
-            console.log('Błąd podczas tworzenia audio:', error);
+            console.log('Błąd audio:', error);
         }
     }
 
@@ -28,23 +35,28 @@
             return Promise.all([
                 t.card('id', 'idList'),
                 t.get('board', 'shared', 'targetListId'),
-                t.get('card', 'private', 'lastListId')
+                t.get('card', 'private', 'lastListId'),
+                t.get('member', 'private', 'audioUnlocked')
             ]).then(function(results) {
                 const card = results[0];
                 const targetListId = results[1];
                 const lastListId = results[2];
+                const unlocked = results[3];
                 const currentListId = card.idList;
 
-                // Sprawdź czy jest skonfigurowana lista docelowa
-                if (targetListId && lastListId && lastListId !== currentListId) {
-                    // Sprawdź czy karta została przeniesiona DO docelowej listy
-                    if (currentListId === targetListId) {
-                        console.log('Karta przeniesiona do docelowej listy!');
+                // Sprawdź czy karta została przeniesiona DO docelowej listy
+                if (targetListId && lastListId && lastListId !== currentListId && currentListId === targetListId) {
+                    console.log('🎮 QUEST COMPLETED! Odtwarzam dźwięk...');
+
+                    // Spróbuj odtworzyć tylko jeśli było odblokowane
+                    if (unlocked || audioUnlocked) {
                         playSound();
+                    } else {
+                        console.log('💡 Dźwięk nie odblokowany - kliknij "🔊 Włącz dźwięki"');
                     }
                 }
 
-                // Zapisz aktualną pozycję karty
+                // Zapisz aktualną pozycję
                 t.set('card', 'private', 'lastListId', currentListId);
 
                 return [];
@@ -57,39 +69,37 @@
                     dark: 'https://cdn-icons-png.flaticon.com/128/727/727269.png',
                     light: 'https://cdn-icons-png.flaticon.com/128/727/727269.png'
                 },
-                text: 'Dźwięk',
+                text: 'Quest Sound',
                 callback: function(t) {
-                    // Używamy t.lists() zamiast t.board('lists')
                     return t.lists('all').then(function(lists) {
-                        return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
+                        return Promise.all([
+                            t.get('board', 'shared', 'targetListId'),
+                            t.get('member', 'private', 'audioUnlocked')
+                        ]).then(function(results) {
+                            const savedListId = results[0];
+                            const unlocked = results[1];
 
-                            // Stwórz opcje do wyboru
-                            const items = lists.map(function(list) {
-                                return {
-                                    text: list.name + (list.id === savedListId ? ' ✓' : ''),
+                            const items = [];
+
+                            // Jeśli audio nie jest odblokowane, dodaj przycisk na górze
+                            if (!unlocked && !audioUnlocked) {
+                                items.push({
+                                    text: '🔊 Włącz dźwięki quest complete',
                                     callback: function(t) {
-                                        return t.set('board', 'shared', 'targetListId', list.id).then(function() {
-                                            return t.alert({
-                                                message: 'Zapisano: ' + list.name,
-                                                duration: 3,
-                                                display: 'success'
-                                            });
+                                        playSound();
+                                        t.set('member', 'private', 'audioUnlocked', true);
+                                        return t.alert({
+                                            message: '🎮 Dźwięki włączone! Teraz przesuń kartę na docelową kolumnę.',
+                                            duration: 4,
+                                            display: 'success'
                                         });
                                     }
-                                };
-                            });
+                                });
+                                items.push({ text: '---' });
+                            }
 
-                            // Dodaj opcję testowania dźwięku
-                            items.push({
-                                text: '🔊 Testuj dźwięk',
-                                callback: function(t) {
-                                    playSound();
-                                    return t.closePopup();
-                                }
-                            });
-
-                            // Dodaj informację o aktualnych ustawieniach
-                            let currentListName = 'Brak';
+                            // Info o aktualnych ustawieniach
+                            let currentListName = 'Nie wybrano';
                             if (savedListId) {
                                 const currentList = lists.find(function(l) { return l.id === savedListId; });
                                 if (currentList) {
@@ -97,63 +107,46 @@
                                 }
                             }
 
+                            items.push({
+                                text: '📍 Kolumna: ' + currentListName,
+                                icon: 'https://cdn-icons-png.flaticon.com/128/7334/7334232.png'
+                            });
+                            items.push({ text: '---' });
+
+                            // Lista kolumn do wyboru
+                            lists.forEach(function(list) {
+                                items.push({
+                                    text: list.name + (list.id === savedListId ? ' ✓' : ''),
+                                    callback: function(t) {
+                                        return t.set('board', 'shared', 'targetListId', list.id).then(function() {
+                                            return t.alert({
+                                                message: '✓ Quest complete na: ' + list.name,
+                                                duration: 3,
+                                                display: 'success'
+                                            });
+                                        });
+                                    }
+                                });
+                            });
+
+                            items.push({ text: '---' });
+                            items.push({
+                                text: '🎵 Testuj dźwięk',
+                                callback: function(t) {
+                                    playSound();
+                                    t.set('member', 'private', 'audioUnlocked', true);
+                                    return t.closePopup();
+                                }
+                            });
+
                             return t.popup({
-                                title: 'Wybierz kolumnę docelową',
-                                items: [{
-                                    text: 'Aktualnie: ' + currentListName,
-                                    icon: 'https://cdn-icons-png.flaticon.com/128/7334/7334232.png'
-                                }].concat([{text: '---'}], items)
+                                title: '🎮 Quest Complete Sound',
+                                items: items
                             });
                         });
                     });
                 }
             }];
-        },
-
-        'show-settings': function(t, options) {
-            return t.lists('all').then(function(lists) {
-                return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
-
-                    const items = lists.map(function(list) {
-                        return {
-                            text: list.name + (list.id === savedListId ? ' ✓' : ''),
-                            callback: function(t) {
-                                return t.set('board', 'shared', 'targetListId', list.id).then(function() {
-                                    return t.alert({
-                                        message: 'Zapisano: ' + list.name,
-                                        duration: 3,
-                                        display: 'success'
-                                    });
-                                });
-                            }
-                        };
-                    });
-
-                    items.push({
-                        text: '🔊 Testuj dźwięk',
-                        callback: function(t) {
-                            playSound();
-                            return t.closePopup();
-                        }
-                    });
-
-                    let currentListName = 'Brak';
-                    if (savedListId) {
-                        const currentList = lists.find(function(l) { return l.id === savedListId; });
-                        if (currentList) {
-                            currentListName = currentList.name;
-                        }
-                    }
-
-                    return t.popup({
-                        title: 'Wybierz kolumnę docelową',
-                        items: [{
-                            text: 'Aktualnie: ' + currentListName,
-                            icon: 'https://cdn-icons-png.flaticon.com/128/7334/7334232.png'
-                        }].concat([{text: '---'}], items)
-                    });
-                });
-            });
         }
     });
 </script>

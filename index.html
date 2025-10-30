@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sound Power-Up</title>
+    <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            padding: 20px;
+            margin: 0;
+        }
+        .settings-container {
+            max-width: 400px;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #172b4d;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #5e6c84;
+            font-size: 14px;
+        }
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #dfe1e6;
+            border-radius: 3px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        select:focus {
+            outline: none;
+            border-color: #0079bf;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #0079bf;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #026aa7;
+        }
+        button:active {
+            background: #055a8c;
+        }
+        .info {
+            background: #f4f5f7;
+            padding: 12px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #5e6c84;
+            margin-bottom: 20px;
+        }
+        .test-button {
+            background: #61bd4f;
+            margin-top: 10px;
+        }
+        .test-button:hover {
+            background: #51a83e;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3';
+
+    // Funkcja do odtwarzania dźwięku
+    function playSound() {
+        try {
+            const audio = new Audio(SOUND_URL);
+            audio.volume = 0.6;
+            audio.play().catch(function(error) {
+                console.log('Nie można odtworzyć dźwięku:', error);
+            });
+        } catch (error) {
+            console.log('Błąd podczas tworzenia audio:', error);
+        }
+    }
+
+    // Inicjalizacja Power-Up
+    const t = window.TrelloPowerUp.initialize({
+        'card-badges': function(t, options) {
+            return Promise.all([
+                t.card('id', 'idList'),
+                t.get('board', 'shared', 'targetListId'),
+                t.get('card', 'private', 'lastListId')
+            ]).then(function([card, targetListId, lastListId]) {
+                const currentListId = card.idList;
+
+                // Sprawdź czy jest skonfigurowana lista docelowa
+                if (targetListId && lastListId && lastListId !== currentListId) {
+                    // Sprawdź czy karta została przeniesiona DO docelowej listy
+                    if (currentListId === targetListId) {
+                        console.log('Karta przeniesiona do docelowej listy!');
+                        playSound();
+                    }
+                }
+
+                // Zapisz aktualną pozycję karty
+                t.set('card', 'private', 'lastListId', currentListId);
+
+                return [];
+            });
+        },
+
+        'board-buttons': function(t, options) {
+            return [{
+                icon: '🔊',
+                text: 'Konfiguracja Dźwięku',
+                callback: function(t) {
+                    return t.popup({
+                        title: 'Ustawienia Sound Power-Up',
+                        url: './index.html?settings=1',
+                        height: 250
+                    });
+                }
+            }];
+        },
+
+        'show-settings': function(t, options) {
+            return t.popup({
+                title: 'Ustawienia Sound Power-Up',
+                url: './index.html?settings=1',
+                height: 250
+            });
+        }
+    });
+
+    // Sprawdź czy to strona ustawień
+    if (window.location.pathname.includes('settings.html') || window.location.search.includes('settings')) {
+        // W kontekście popupu Trello używamy klienta iframe
+        const ti = window.TrelloPowerUp.iframe();
+        document.body.innerHTML = `
+        <div class="settings-container">
+          <h2>Wybierz kolumnę docelową</h2>
+          <div class="info">
+            Dźwięk będzie odtwarzany, gdy karta zostanie przeniesiona do wybranej kolumny.
+          </div>
+          <div class="form-group">
+            <label for="listSelect">Kolumna docelowa:</label>
+            <select id="listSelect">
+              <option value="">Ładowanie list...</option>
+            </select>
+          </div>
+          <button id="saveBtn">Zapisz ustawienia</button>
+          <button id="testBtn" class="test-button">🔊 Testuj dźwięk</button>
+        </div>
+      `;
+
+        const listSelect = document.getElementById('listSelect');
+        const saveBtn = document.getElementById('saveBtn');
+        const testBtn = document.getElementById('testBtn');
+
+        // Pobierz wszystkie listy z tablicy
+        ti.board('lists').then(function(lists) {
+            // Pobierz zapisaną listę docelową
+            return ti.get('board', 'shared', 'targetListId').then(function(savedListId) {
+                listSelect.innerHTML = '<option value="">-- Wybierz kolumnę --</option>';
+
+                lists.forEach(function(list) {
+                    const option = document.createElement('option');
+                    option.value = list.id;
+                    option.textContent = list.name;
+                    if (list.id === savedListId) {
+                        option.selected = true;
+                    }
+                    listSelect.appendChild(option);
+                });
+            });
+        });
+
+        // Zapisz wybór
+        saveBtn.addEventListener('click', function() {
+            const selectedListId = listSelect.value;
+
+            if (!selectedListId) {
+                alert('Wybierz kolumnę!');
+                return;
+            }
+
+            ti.set('board', 'shared', 'targetListId', selectedListId).then(function() {
+                ti.closePopup();
+                ti.alert({
+                    message: 'Ustawienia zapisane! ✓',
+                    duration: 3
+                });
+            });
+        });
+
+        // Test dźwięku
+        testBtn.addEventListener('click', function() {
+            playSound();
+        });
+    }
+</script>
+</body>
+</html>

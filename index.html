@@ -57,7 +57,7 @@
                 text: 'Dźwięk',
                 callback: function(t) {
                     // Pobierz wszystkie listy
-                    return t.board('lists').then(function(lists) {
+                    return t.lists('all').then(function(lists) {
                         return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
 
                             // Stwórz opcje do wyboru
@@ -109,7 +109,7 @@
 
         'show-settings': function(t, options) {
             // Możesz też dodać settings w menu Power-Up
-            return t.board('lists').then(function(lists) {
+            return t.lists('all').then(function(lists) {
                 return t.get('board', 'shared', 'targetListId').then(function(savedListId) {
 
                     const items = lists.map(function(list) {
